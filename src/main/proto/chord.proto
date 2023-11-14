@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package chord;
+
+//option java_package = "chord";
+option java_multiple_files = true;
+
+service Chord {
+  //  rpc Ping(PingRequest) returns (PingResponse);
+  //  rpc JoinChord(JoinChord) returns (PingResponse);
+  rpc Upload(stream FileRequest) returns(FileUploadResponse);
+  // targetId is the id of the requesting node
+  rpc MoveFiles(TargetId) returns (stream FileRequest);
+  // targetId is the id of the file (sha1 hash of the file name)
+  rpc DownloadFile (TargetId) returns (stream FileRequest);
+  rpc FindSuccessor(TargetId) returns (FingerInfo);
+  rpc GetSuccessor(GetSuccessorRequest) returns (FingerInfo);
+  rpc GetPredecessor(GetPredecessorRequest) returns (FingerInfo);
+  rpc SetSuccessor(FingerInfo) returns (ResponseStatus);
+  rpc SetPredecessor(FingerInfo) returns (ResponseStatus);
+  rpc ClosestPrecedingFinger(TargetId) returns (FingerInfo);
+  rpc UpdateFingerTable(UpdateFingerRequest) returns (ResponseStatus);
+  //  rpc FindPredecessor(TargetId) returns (FingerInfo);
+}
+
+message UpdateFingerRequest{
+  int32 index = 1;
+  FingerInfo finger = 2;
+}
+message ResponseStatus{
+  enum Status{
+    SUCCESS = 0;
+    FAILED = 1;
+  }
+  Status status = 1;
+}
+message MetaData {
+  string name = 1;
+  //  string type = 2;
+}
+
+// data chunk
+message FilePacket {
+  bytes content = 1;
+}
+message FileRequest {
+  oneof request {
+    MetaData metadata = 1;
+    FilePacket file = 2;
+  }
+}
+
+message FileUploadResponse {
+  string name = 1;
+  FileStatus status = 2;
+}
+
+enum FileStatus {
+  PENDING = 0;
+  IN_PROGRESS = 1;
+  SUCCESS = 2;
+  FAILED = 3;
+}
+
+message TargetId{
+  int64 id = 1;
+}
+// get successor of the node
+message GetSuccessorRequest{
+}
+message GetPredecessorRequest{
+
+}
+
+//message JoinChordResponse{
+//  string assignedPredecessorAddress = 1;
+//  int32 assignedPort = 2;
+//  string assignedSuccessorAddress = 3;
+//  int32 assignedPort = 4;
+//}
+
+message FingerInfo{
+  string ip = 1;
+  int32 port = 2;
+  int64 id = 3;
+}
+
+//service Chor
