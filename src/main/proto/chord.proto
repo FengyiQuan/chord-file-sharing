@@ -20,7 +20,7 @@ service Chord {
   rpc SetPredecessor(FingerInfo) returns (ResponseStatus);
   rpc ClosestPrecedingFinger(TargetId) returns (FingerInfo);
   rpc UpdateFingerTable(UpdateFingerRequest) returns (ResponseStatus);
-  //  rpc FindPredecessor(TargetId) returns (FingerInfo);
+  rpc Notify(FingerInfo) returns (ResponseStatus);
 }
 
 message UpdateFingerRequest{
@@ -36,7 +36,6 @@ message ResponseStatus{
 }
 message MetaData {
   string name = 1;
-  //  string type = 2;
 }
 
 // data chunk
@@ -72,17 +71,8 @@ message GetPredecessorRequest{
 
 }
 
-//message JoinChordResponse{
-//  string assignedPredecessorAddress = 1;
-//  int32 assignedPort = 2;
-//  string assignedSuccessorAddress = 3;
-//  int32 assignedPort = 4;
-//}
-
 message FingerInfo{
   string ip = 1;
   int32 port = 2;
   int64 id = 3;
 }
-
-//service Chor

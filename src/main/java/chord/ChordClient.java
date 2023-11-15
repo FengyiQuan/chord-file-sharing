@@ -2,20 +2,18 @@ package chord;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.grpc.StatusRuntimeException;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ChordClient {
     private static final Logger logger = Logger.getLogger(ChordClient.class.getName());
 
-     final ManagedChannel channel;
-     final ChordGrpc.ChordBlockingStub blockingStub;
-     final ChordGrpc.ChordStub asyncStub;
+    final ManagedChannel channel;
+    final ChordGrpc.ChordBlockingStub blockingStub;
+    final ChordGrpc.ChordStub asyncStub;
 
     public ChordClient(String host, int port) {
         channel = ManagedChannelBuilder.forAddress(host, port)
@@ -27,6 +25,7 @@ public class ChordClient {
     }
 
     public ChordClient(String host, int port, SslContext sslContext) {
+        logger.info("Creating secure channel using ssl context");
         channel = NettyChannelBuilder.forAddress(host, port)
                 .sslContext(sslContext)
                 .build();
@@ -35,14 +34,13 @@ public class ChordClient {
         asyncStub = ChordGrpc.newStub(channel);
     }
 
-    public void shutdown()  {
+    public void shutdown() {
         try {
             channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
-
 
 
 }

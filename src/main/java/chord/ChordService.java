@@ -6,21 +6,16 @@ import com.google.protobuf.GeneratedMessageV3;
 import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-//import observer.FileRequestObserver;
-//
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.logging.Logger;
 
 public class ChordService extends ChordGrpc.ChordImplBase {
     private static final Logger logger = Logger.getLogger(ChordService.class.getName());
-    public static final Path SERVER_BASE_PATH = Paths.get("src/main/resources/" + System.getenv("PORT"));
-    ;//Paths.get("src/main/resources/");
-    //    String javaHome = System.getenv("JAVA_HOME");
+    public static final Path SERVER_BASE_PATH = Paths.get("src/main/resources/" + System.getenv("PORT") + "/");
     private final Node node;
 
     public ChordService(int port) {
@@ -31,12 +26,30 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         return node;
     }
 
+    /**
+     * @param request          the request contains the info of the node that thinks it might be our predecessor
+     * @param responseObserver the responseObserver is used to send the response back to the caller
+     */
+    @Override
+    public void notify(FingerInfo request, StreamObserver<ResponseStatus> responseObserver) {
+        long requestId = request.getId();
+        FingerInfo currentPredecessor = this.node.getPredecessor();
+        if (currentPredecessor == null || Utils.inside(requestId, currentPredecessor.getId(), this.node.getId(), false, false)) {
+            this.node.setPredecessor(request);
+            responseObserver.onNext(ResponseStatus.newBuilder().setStatus(ResponseStatus.Status.SUCCESS).build());
+        }else{
+            responseObserver.onNext(ResponseStatus.newBuilder().setStatus(ResponseStatus.Status.FAILED).build());
+        }
+        responseObserver.onCompleted();
+    }
+
     @Override
     // move keys in (predecessor,n] from successor
     public void moveFiles(TargetId request, StreamObserver<FileRequest> responseObserver) {
         List<String> files = this.node.getKeys(request.getId());
         for (String fileName : files) {
             String filePath = SERVER_BASE_PATH + fileName;
+
             FileRequest metadata = FileRequest.newBuilder()
                     .setMetadata(MetaData.newBuilder()
                             .setName(fileName))
@@ -72,7 +85,8 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     @Override
     public void downloadFile(TargetId request, StreamObserver<FileRequest> responseObserver) {
         String fileName = this.node.getFileName(request.getId());
-        String filePath = SERVER_BASE_PATH + fileName;
+        Path filePath = SERVER_BASE_PATH.resolve(fileName);
+        System.out.println(filePath);
         FileRequest metadata = FileRequest.newBuilder()
                 .setMetadata(MetaData.newBuilder()
                         .setName(fileName))
@@ -80,7 +94,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         responseObserver.onNext(metadata);
         try {
             // read the file and convert to a byte array
-            InputStream inputStream = Files.newInputStream(Path.of(filePath));
+            InputStream inputStream = Files.newInputStream(filePath);
             byte[] bytes = new byte[4096];
             int size;
             while ((size = inputStream.read(bytes)) > 0) {
@@ -107,7 +121,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
 
     @Override
     public StreamObserver<FileRequest> upload(StreamObserver<FileUploadResponse> responseObserver) {
-        return new StreamObserver<FileRequest>() {
+        return new StreamObserver<>() {
             // upload context variables
             OutputStream writer;
             String fileName;
@@ -118,6 +132,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
                 try {
                     // TODO: check if file hash is on its responsibility
                     if (fileUploadRequest.hasMetadata()) {
+
                         fileName = fileUploadRequest.getMetadata().getName();
                         writer = Utils.getFilePath(fileUploadRequest);
                     } else {
@@ -136,7 +151,12 @@ public class ChordService extends ChordGrpc.ChordImplBase {
 
             @Override
             public void onCompleted() {
-                Utils.closeFile(writer);
+                logger.info("File upload completed");
+                try {
+                    Utils.closeFile(writer);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 status = FileStatus.IN_PROGRESS.equals(status) ? FileStatus.SUCCESS : status;
                 FileUploadResponse response = FileUploadResponse.newBuilder()
                         .setStatus(status)
@@ -155,12 +175,6 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         ChordClient client = new ChordClient(n_dash.getIp(), n_dash.getPort());
         FingerInfo fingerInfo = client.blockingStub.getSuccessor(GetSuccessorRequest.newBuilder().build());
         client.shutdown();
-//        try {
-//            client.shutdown();
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
-//        System.out.println("getSuccessor fingerInfo:"+fingerInfo);
         if (!requiredNonCancelled(responseObserver)) {
             return;
         }
@@ -237,9 +251,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         if (Utils.inside(fingerInfo.getId(), this.node.getId(), this.node.getFingerTable().get(index).getId(), true, false)) {
 
             this.node.setFingerEntry(index, fingerInfo);
-//            System.out.println("set finger entry success");
             FingerInfo p = this.node.getPredecessor();
-//            System.out.println("p:"+p.toString());
             ChordClient chordClient = new ChordClient(p.getIp(), p.getPort());
             response = chordClient.blockingStub.updateFingerTable(UpdateFingerRequest.newBuilder().setFinger(fingerInfo).setIndex(index).build());
             responseObserver.onNext(response);

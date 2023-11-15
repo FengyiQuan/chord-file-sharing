@@ -3,7 +3,6 @@ package chord;
 import com.google.protobuf.ByteString;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -13,10 +12,11 @@ import java.security.NoSuchAlgorithmException;
 
 public class Utils {
 
-
     public static boolean inside(long key, long left, long right, boolean leftIncluded, boolean rightIncluded) {
         if (key > Node.MAX_NUMBER_NODE || key < 0) {
+            System.out.println("inside params: key: " + key + ", left: " + left + ", right: " + right + ", leftIncluded: " + leftIncluded + ", rightIncluded: " + rightIncluded);
 
+//            return false;
             throw new IllegalArgumentException("key is not in range, key: " + key + ", left: " + left + ", right: " + right + ", leftIncluded: " + leftIncluded + ", rightIncluded: " + rightIncluded);
         }
         if (left < right) {
@@ -35,7 +35,7 @@ public class Utils {
     // message is hash of the file name
     public static int getKey(String message) {
 
-        MessageDigest md = null;
+        MessageDigest md;
         try {
             md = MessageDigest.getInstance("sha1");
         } catch (NoSuchAlgorithmException e) {
@@ -45,7 +45,7 @@ public class Utils {
 
         byte[] messageDigest = md.digest(message.getBytes());
 
-        // Convert byte array into signum representation
+        // Convert byte array into Dignum representation
         BigInteger no = new BigInteger(1, messageDigest);
 
 
@@ -53,8 +53,8 @@ public class Utils {
     }
 
     static OutputStream getFilePath(FileRequest request) throws IOException {
-        String fileName = request.getMetadata().getName();// + "." + request.getMetadata().getType();
-//        System.out.println("fileName"+fileName);
+        String fileName = request.getMetadata().getName();
+
         return Files.newOutputStream(ChordService.SERVER_BASE_PATH.resolve(fileName), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
@@ -63,12 +63,9 @@ public class Utils {
         writer.flush();
     }
 
-    static void closeFile(OutputStream writer) {
-        try {
-            writer.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    static void closeFile(OutputStream writer) throws IOException {
+        writer.close();
+
     }
 
 }
