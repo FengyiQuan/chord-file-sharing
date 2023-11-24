@@ -72,11 +72,11 @@ public class ChordServer {
     public static SslContext loadTLSCredentials() throws SSLException {
         File serverCertFile = new File("cert/server-cert.pem");
         File serverKeyFile = new File("cert/server-key.pem");
-        File clientCACertFile = new File("cert/ca-cert.pem");
+//        File clientCACertFile = new File("cert/ca-cert.pem");
 
         SslContextBuilder ctxBuilder = SslContextBuilder.forServer(serverCertFile, serverKeyFile)
-                .clientAuth(ClientAuth.NONE)//.REQUIRE
-                .trustManager(clientCACertFile);
+                .clientAuth(ClientAuth.NONE);//.REQUIRE
+//                .trustManager(clientCACertFile);
 
         return GrpcSslContexts.configure(ctxBuilder).build();
     }

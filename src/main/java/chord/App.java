@@ -1,16 +1,24 @@
 package chord;
 
+import io.netty.handler.ssl.SslContext;
+
+import javax.net.ssl.SSLException;
 import java.io.IOException;
 
 public class App {
     private final ChordServer chordServer;
 
     public App() {
-        //        SslContext sslContext = ChordServer.loadTLSCredentials();
+        SslContext sslContext = null;
+        try {
+            sslContext = ChordServer.loadTLSCredentials();
+        } catch (SSLException e) {
+            e.printStackTrace();
+        }
 //        ChordServer server = new ChordServer(Utils.PORT, sslContext);
 //        server.start();
 //        server.blockUntilShutdown();
-        this.chordServer = new ChordServer(Utils.PORT);
+        this.chordServer = new ChordServer(Utils.PORT, sslContext);
         run();
     }
 
