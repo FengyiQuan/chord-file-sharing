@@ -17,9 +17,8 @@ import java.util.logging.Logger;
 
 
 public class Node extends ChordGrpc.ChordImplBase {
-
-
     private static final Logger logger = Logger.getLogger(Node.class.getName());
+    public static final boolean DEBUG = false;
     public static final int M = 3; // bits of hash
     public static final int MAX_NUMBER_NODE = (int) Math.pow(2, M); // 2^M
     public static final int PERIODICALLY_CHECK_INTERVAL = 5000; // 5s
@@ -34,6 +33,11 @@ public class Node extends ChordGrpc.ChordImplBase {
     private final Map<Long, String> fileMap; // 存储其负责的标识符，String is key
     private FingerInfo predecessor;
 
+
+    public Node() {
+        this(Integer.parseInt(System.getenv("PORT")));
+    }
+
     public Node(int port) {
         this("localhost", port);
     }
@@ -43,7 +47,6 @@ public class Node extends ChordGrpc.ChordImplBase {
         this.ip = ip;
         this.port = port;
         this.id = Utils.getKey(ip, port);
-//        System.out.println("id:" + this.id);
         this.fingerTable = new HashMap<>();
         this.fingerStart = new ArrayList<>();
         this.fileMap = new HashMap<>();
@@ -96,11 +99,14 @@ public class Node extends ChordGrpc.ChordImplBase {
                 this.printInfo();
             } else {
                 System.out.println("Help:");
+                System.out.println("[command] [args]");
                 System.out.println("-- send <file_path>: upload file to chord ring");
+                System.out.println("-- join: start a new ring");
                 System.out.println("-- join [<ip>] [<port>]: join chord ring, if no ip and port provided, start new ring");
                 System.out.println("-- ftable: print finger table");
                 System.out.println("-- files: print file stored in this map and corresponding key");
                 System.out.println("-- download <file_name>: download file from chord");
+                System.out.println("-- info: print node info");
             }
 
         }
@@ -168,12 +174,12 @@ public class Node extends ChordGrpc.ChordImplBase {
         ResponseStatus pStatus = predecessorClient.blockingStub.setSuccessor(this.getSelfFingerInfo());
         ResponseStatus sStatus = successorClient.blockingStub.setPredecessor(this.getSelfFingerInfo());
 
-        logger.info("initFingerTable result: pStatus" + pStatus.getStatus() + ", sStatus" + sStatus.getStatus());
+        if (DEBUG) {
+            logger.info("initFingerTable result: pStatus" + pStatus.getStatus() + ", sStatus" + sStatus.getStatus());
+        }
+
         for (int i = 0; i < M; i++) {
-
-
             FingerInfo newFinger = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.fingerStart.get(i + 1)).build());
-
             this.fingerTable.put(i + 1, newFinger);
 
         }
@@ -386,6 +392,9 @@ public class Node extends ChordGrpc.ChordImplBase {
     }
 
     public FingerInfo findPredecessor(long id) {
+        if (id == this.id) {
+            return this.getPredecessor();
+        }
         GetSuccessorRequest request = GetSuccessorRequest.newBuilder().build();
         FingerInfo nDash = this.getSelfFingerInfo();
 
@@ -405,7 +414,10 @@ public class Node extends ChordGrpc.ChordImplBase {
                 return null;
             }
         }
-        logger.info("findPredecessor result: " + nDash);
+        if (DEBUG) {
+            logger.info("findPredecessor result: " + nDash);
+
+        }
         return nDash;
     }
 

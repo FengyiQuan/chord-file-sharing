@@ -6,19 +6,25 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class Utils {
+    public static final String IP = System.getenv("HOST");
+    public static int PORT = Integer.parseInt(System.getenv("PORT"));
+    public static final Path SERVER_BASE_PATH = Paths.get("src/main/resources/" + System.getenv("PORT") + "/");
+
 
     public static boolean inside(long key, long left, long right, boolean leftIncluded, boolean rightIncluded) {
-        if (key > Node.MAX_NUMBER_NODE || key < 0) {
-            System.out.println("inside params: key: " + key + ", left: " + left + ", right: " + right + ", leftIncluded: " + leftIncluded + ", rightIncluded: " + rightIncluded);
-
-//            return false;
-            throw new IllegalArgumentException("key is not in range, key: " + key + ", left: " + left + ", right: " + right + ", leftIncluded: " + leftIncluded + ", rightIncluded: " + rightIncluded);
-        }
+//        if (key > Node.MAX_NUMBER_NODE || key < 0) {
+//            System.out.println("inside params: key: " + key + ", left: " + left + ", right: " + right + ", leftIncluded: " + leftIncluded + ", rightIncluded: " + rightIncluded);
+//
+////            return false;
+//            throw new IllegalArgumentException("key is not in range, key: " + key + ", left: " + left + ", right: " + right + ", leftIncluded: " + leftIncluded + ", rightIncluded: " + rightIncluded);
+//        }
         if (left < right) {
             return (leftIncluded ? left - 1 : left) < key && key < (rightIncluded ? right + 1 : right);
         } else {
@@ -55,7 +61,7 @@ public class Utils {
     static OutputStream getFilePath(FileRequest request) throws IOException {
         String fileName = request.getMetadata().getName();
 
-        return Files.newOutputStream(ChordService.SERVER_BASE_PATH.resolve(fileName), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        return Files.newOutputStream(SERVER_BASE_PATH.resolve(fileName), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
     static void writeFile(OutputStream writer, ByteString content) throws IOException {

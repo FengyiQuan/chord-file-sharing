@@ -18,22 +18,22 @@ import java.util.logging.Logger;
 public class ChordServer {
     private static final Logger logger = Logger.getLogger(ChordServer.class.getName());
 
-    private final int port;
+    //    private final int port;
     private final Server server;
     private final ChordService chordService;
 
     public ChordServer(int port) {
-        this(ServerBuilder.forPort(port), port);
+        this(ServerBuilder.forPort(port));
     }
 
     public ChordServer(int port,
                        SslContext sslContext) {
-        this(NettyServerBuilder.forPort(port).sslContext(sslContext), port);
+        this(NettyServerBuilder.forPort(port).sslContext(sslContext));
     }
 
-    public ChordServer(ServerBuilder<?> serverBuilder, int port) {
-        this.port = port;
-        chordService = new ChordService(port);
+    public ChordServer(ServerBuilder<?> serverBuilder) {
+//        this.port = port;
+        chordService = new ChordService(Utils.PORT);
 
         server = serverBuilder.addService(chordService)
                 .addService(ProtoReflectionService.newInstance())
@@ -43,7 +43,7 @@ public class ChordServer {
     public void start() throws IOException, InterruptedException {
         server.start();
         chordService.getNode().start();
-        logger.info("server started on port " + port);
+        logger.info("server started on port " + Utils.PORT);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.err.println("shut down gRPC server because JVM shuts down");
@@ -63,7 +63,7 @@ public class ChordServer {
         }
     }
 
-    private void blockUntilShutdown() throws InterruptedException {
+    void blockUntilShutdown() throws InterruptedException {
         if (server != null) {
             server.awaitTermination();
         }
@@ -75,17 +75,14 @@ public class ChordServer {
         File clientCACertFile = new File("cert/ca-cert.pem");
 
         SslContextBuilder ctxBuilder = SslContextBuilder.forServer(serverCertFile, serverKeyFile)
-                .clientAuth(ClientAuth.REQUIRE)
+                .clientAuth(ClientAuth.NONE)//.REQUIRE
                 .trustManager(clientCACertFile);
 
         return GrpcSslContexts.configure(ctxBuilder).build();
     }
 
-    public static void main(String[] args) throws InterruptedException, IOException {
+//    public static void main(String[] args) throws InterruptedException, IOException {
+//
 
-        SslContext sslContext = ChordServer.loadTLSCredentials();
-        ChordServer server = new ChordServer(Integer.parseInt(args[0]));
-        server.start();
-        server.blockUntilShutdown();
-    }
+//    }
 }

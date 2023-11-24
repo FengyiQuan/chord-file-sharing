@@ -1,21 +1,20 @@
 package chord;
 
-
 import com.google.protobuf.ByteString;
 import com.google.protobuf.GeneratedMessageV3;
 import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.logging.Logger;
 
 public class ChordService extends ChordGrpc.ChordImplBase {
     private static final Logger logger = Logger.getLogger(ChordService.class.getName());
-    public static final Path SERVER_BASE_PATH = Paths.get("src/main/resources/" + System.getenv("PORT") + "/");
+
     private final Node node;
 
     public ChordService(int port) {
@@ -37,7 +36,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         if (currentPredecessor == null || Utils.inside(requestId, currentPredecessor.getId(), this.node.getId(), false, false)) {
             this.node.setPredecessor(request);
             responseObserver.onNext(ResponseStatus.newBuilder().setStatus(ResponseStatus.Status.SUCCESS).build());
-        }else{
+        } else {
             responseObserver.onNext(ResponseStatus.newBuilder().setStatus(ResponseStatus.Status.FAILED).build());
         }
         responseObserver.onCompleted();
@@ -48,7 +47,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     public void moveFiles(TargetId request, StreamObserver<FileRequest> responseObserver) {
         List<String> files = this.node.getKeys(request.getId());
         for (String fileName : files) {
-            String filePath = SERVER_BASE_PATH + fileName;
+            String filePath = Utils.SERVER_BASE_PATH + fileName;
 
             FileRequest metadata = FileRequest.newBuilder()
                     .setMetadata(MetaData.newBuilder()
@@ -85,7 +84,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     @Override
     public void downloadFile(TargetId request, StreamObserver<FileRequest> responseObserver) {
         String fileName = this.node.getFileName(request.getId());
-        Path filePath = SERVER_BASE_PATH.resolve(fileName);
+        Path filePath = Utils.SERVER_BASE_PATH.resolve(fileName);
         System.out.println(filePath);
         FileRequest metadata = FileRequest.newBuilder()
                 .setMetadata(MetaData.newBuilder()
@@ -180,7 +179,9 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         }
         responseObserver.onNext(fingerInfo);
         responseObserver.onCompleted();
-        logger.info("findSuccessor: " + fingerInfo);
+        if (Node.DEBUG) {
+            logger.info("findSuccessor: " + fingerInfo);
+        }
     }
 
     @Override
@@ -191,7 +192,9 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         }
         responseObserver.onNext(fingerInfo);
         responseObserver.onCompleted();
-        logger.info("getSuccessor: " + fingerInfo);
+        if (Node.DEBUG) {
+            logger.info("getSuccessor: " + fingerInfo);
+        }
     }
 
     @Override
@@ -202,7 +205,9 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         }
         responseObserver.onNext(fingerInfo);
         responseObserver.onCompleted();
-        logger.info("getPredecessor: " + fingerInfo);
+        if (Node.DEBUG) {
+            logger.info("getPredecessor: " + fingerInfo);
+        }
     }
 
     @Override
@@ -238,8 +243,10 @@ public class ChordService extends ChordGrpc.ChordImplBase {
 
         responseObserver.onNext(fingerInfo);
         responseObserver.onCompleted();
+        if (Node.DEBUG) {
+            logger.info("closestPrecedingFinger: " + fingerInfo);
 
-        logger.info("closestPrecedingFinger: " + fingerInfo);
+        }
     }
 
     @Override
