@@ -4,11 +4,12 @@
 
 Chord File Sharing is a decentralized and peer-to-peer file-sharing application that utilizes the Chord DHT (Distributed
 Hash Table) protocol for efficient and scalable file distribution. This version of the project incorporates gRPC (gRPC
-Remote Procedure Calls) for communication between nodes, enhancing the efficiency and maintainability of the system. This
-Java application is a Chord Ring Management System that allows users to interact with a Chord distributed hash table (
-DHT) ring. The system provides various commands for uploading files, joining or creating a ring, printing the finger
-table, listing stored files and their corresponding keys, downloading files, and displaying node information. For more
-information, please refer to the [Chord Paper](https://github.com/FengyiQuan/chord-file-sharing/blob/main/chord.pdf).
+Remote Procedure Calls) for communication between nodes, enhancing the efficiency and maintainability of the system.
+This Java application is a Chord Ring Management System that allows users to interact with a Chord distributed hash
+table (DHT) ring. The system provides various commands for uploading files, joining or creating a ring, printing the
+finger table, listing stored files and their corresponding keys, downloading files, and displaying node information. For
+more information, please refer to
+the [Chord Paper](https://github.com/FengyiQuan/chord-file-sharing/blob/main/chord.pdf).
 
 ## Table of Contents
 
@@ -16,6 +17,7 @@ information, please refer to the [Chord Paper](https://github.com/FengyiQuan/cho
 - [Getting Started](#getting-started)
 - [Usage](#usage)
 - [Future Work](#future-work)
+- [Report](#report)
 - [License](#license)
 
 ## Features
@@ -50,9 +52,7 @@ starts, it starts grpc-java as a daemon thread by default.
 
 Example of setting environment variables in IntelliJ IDEA:
 
-```bash
-HOST=127.0.0.1;PORT=8000
-```
+`HOST=127.0.0.1;PORT=8000`
 
 ## Usage
 
@@ -81,6 +81,10 @@ should call `join` with any known node host and port to join the ring.
 - [ ] Files should be stored in multiple nodes to avoid a single point of failure.
 - [x] Soft exit.
 - [ ] Hard exit.
+
+## Report
+
+[report](https://github.com/FengyiQuan/chord-file-sharing/blob/main/report.pdf)
 
 ## License
 
