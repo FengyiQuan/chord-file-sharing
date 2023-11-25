@@ -14,6 +14,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 
 public class Node extends ChordGrpc.ChordImplBase {
@@ -60,7 +61,7 @@ public class Node extends ChordGrpc.ChordImplBase {
     }
 
     private void userInputHandler() {
-
+        boolean joined = false;
         Scanner scanner = new Scanner(System.in);
         System.out.println("Enter text. Type 'exit' to quit.");
         while (true) {
@@ -72,22 +73,31 @@ public class Node extends ChordGrpc.ChordImplBase {
                 System.exit(0);
             }
 
+
             String[] inputArray = input.split("\\s+");
             String command = inputArray[0];
-            if (command.equalsIgnoreCase("send") && inputArray.length == 2) {
+            if (command.equalsIgnoreCase("join") && !joined) {
+                System.out.println("Join Chord ring...");
+                if (inputArray.length == 1) {
+                    this.join();
+                    joined = true;
+                } else if (inputArray.length == 3) {
+                    this.join(inputArray[1], Integer.parseInt(inputArray[2]));
+                    System.out.println("Joined Chord ring.");
+                    joined = true;
+                }
+                continue;
+            }
+            if (!joined) {
+                System.out.println("Please join the ring first.");
+                continue;
+            }
+            if (command.equalsIgnoreCase("upload") && inputArray.length == 2) {
                 try {
-                    System.out.println("Sending file...");
+                    System.out.println("Uploading file...");
                     this.sendFile(inputArray[1]);
                 } catch (Exception e) {
                     e.printStackTrace();
-                }
-            } else if (command.equalsIgnoreCase("join")) {
-                System.out.println("Join Chord ring...");
-                if (inputArray.length == 1)
-                    this.join();
-                else if (inputArray.length == 3) {
-                    this.join(inputArray[1], Integer.parseInt(inputArray[2]));
-                    System.out.println("Joined Chord ring.");
                 }
             } else if (command.equalsIgnoreCase("ftable") && inputArray.length == 1) {
                 this.printFTable();
@@ -100,7 +110,7 @@ public class Node extends ChordGrpc.ChordImplBase {
             } else {
                 System.out.println("Help:");
                 System.out.println("[command] [args]");
-                System.out.println("-- send <file_path>: upload file to chord ring");
+                System.out.println("-- upload <file_path>: upload file to chord ring");
                 System.out.println("-- join: start a new ring");
                 System.out.println("-- join [<ip>] [<port>]: join chord ring, if no ip and port provided, start new ring");
                 System.out.println("-- ftable: print finger table");
@@ -108,7 +118,6 @@ public class Node extends ChordGrpc.ChordImplBase {
                 System.out.println("-- download <file_name>: download file from chord");
                 System.out.println("-- info: print node info");
             }
-
         }
     }
 
@@ -118,13 +127,15 @@ public class Node extends ChordGrpc.ChordImplBase {
 
     @Override
     public String toString() {
-        return "Node{" +
-                "ip='" + ip + "'" +
-                ", port=" + port +
-                ", id=" + id +
-                ", fingerTable=" + fingerTable +
-                ", fileMap=" + fileMap +
-                ", predecessor=" + predecessor +
+        List<String> ftableList = fingerTable.entrySet().stream().map(entry -> "    " + entry.getKey() + "->" + Utils.formatFingerInfo(entry.getValue()) + "\n").toList();
+        String ftable = String.join("", ftableList);
+        List<String> filesList = fileMap.entrySet().stream().map(entry -> "    " + entry.getValue() + ":" + entry.getKey() + "\n").toList();
+        String files = String.join("", filesList);
+        return "Node " + this.getId() + " {\n" +
+                "  address=" + ip + ":" + port + ", id=" + id + ",\n" +
+                "  fingerTable=\n" + ftable +
+                "  fileMap=\n" + files +
+                "  predecessor=" + Utils.formatFingerInfo(predecessor) + "\n" +
                 '}';
     }
 
@@ -161,11 +172,11 @@ public class Node extends ChordGrpc.ChordImplBase {
 
     //    initialize finger table of  local node
     public void initFingerTable(String remoteAddress, int remotePort) {
-        System.out.println("remoteAddress: " + remoteAddress + " remotePort: " + remotePort);
+//        System.out.println("remoteAddress: " + remoteAddress + " remotePort: " + remotePort);
         ChordClient chordClient = new ChordClient(remoteAddress, remotePort);
         FingerInfo successor = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.id).build());
         this.fingerTable.put(0, successor);
-        System.out.println("successor: " + successor.toString());
+//        System.out.println("successor: " + successor.toString());
         ChordClient successorClient = new ChordClient(this.getSuccessor().getIp(), this.getSuccessor().getPort());
         FingerInfo predecessor = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
 
@@ -187,7 +198,7 @@ public class Node extends ChordGrpc.ChordImplBase {
 
     // update all nodes whose finger tables should refer to this node
     private void updateOthers() {
-        System.out.println("updateOthers called");
+//        System.out.println("updateOthers called");
         this.printFTable();
         for (int i = 0; i < M; i++) {
             // find last node p whose i_th finger might be this node
@@ -196,13 +207,13 @@ public class Node extends ChordGrpc.ChordImplBase {
             ChordClient chordClient = new ChordClient(p.getIp(), p.getPort());
 
             ResponseStatus response = chordClient.blockingStub.updateFingerTable(UpdateFingerRequest.newBuilder().setFinger(this.getSelfFingerInfo()).setIndex(i).build());
-            System.out.println("updateOthers result: " + response.getStatus());
+//            System.out.println("updateOthers result: " + response.getStatus());
 
         }
     }
 
     public void stabilize() {
-        System.out.println("stabilize called");
+//        System.out.println("stabilize called");
         FingerInfo successor = this.getSuccessor();
         ChordClient successorClient = new ChordClient(successor.getIp(), successor.getPort());
         FingerInfo x = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
@@ -217,11 +228,11 @@ public class Node extends ChordGrpc.ChordImplBase {
     private void notifyOther(FingerInfo successor) {
         ChordClient newSuccessorClient = new ChordClient(successor.getIp(), successor.getPort());
         ResponseStatus responseStatus = newSuccessorClient.blockingStub.notify(this.getSelfFingerInfo());
-        System.out.println("notifyOther result: " + responseStatus.getStatus());
+//        System.out.println("notifyOther result: " + responseStatus.getStatus());
     }
 
     public void fixFingers() {
-        System.out.println("fixFingers called");
+//        System.out.println("fixFingers called");
         int index = ThreadLocalRandom.current().nextInt(1, M + 1);
         ChordClient chordClient = new ChordClient(this.ip, this.port);
         FingerInfo fingerInfo = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.fingerStart.get(index)).build());

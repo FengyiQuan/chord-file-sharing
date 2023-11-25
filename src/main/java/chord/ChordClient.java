@@ -19,18 +19,18 @@ public class ChordClient {
     final ChordGrpc.ChordStub asyncStub;
 
     public ChordClient(String host, int port) {
-//        channel = ManagedChannelBuilder.forAddress(host, port)
-//                .usePlaintext()
-//                .build();
-        SslContext sslContext = null;
-        try {
-            sslContext = loadTLSCredentials();
-        } catch (SSLException e) {
-            e.printStackTrace();
-        }
-        channel = NettyChannelBuilder.forAddress(host, port)
-                .sslContext(sslContext)
+        channel = ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext()
                 .build();
+//        SslContext sslContext = null;
+//        try {
+//            sslContext = loadTLSCredentials();
+//        } catch (SSLException e) {
+//            e.printStackTrace();
+//        }
+//        channel = NettyChannelBuilder.forAddress(host, port)
+//                .sslContext(sslContext)
+//                .build();
 
         blockingStub = ChordGrpc.newBlockingStub(channel);
         asyncStub = ChordGrpc.newStub(channel);

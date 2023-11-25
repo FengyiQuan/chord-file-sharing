@@ -20,13 +20,14 @@ public class App {
         } catch (SSLException e) {
             e.printStackTrace();
         }
-        System.out.println("sslContext: " + sslContext);
+//        System.out.println("sslContext: " + sslContext);
 //        ChordServer server = new ChordServer(Utils.PORT, sslContext);
 //        server.start();
 //        server.blockUntilShutdown();
         System.out.println("Utils.PORT: " + PORT);
-        System.out.println("Utils.HOst: " + IP);
-        this.chordServer = new ChordServer(PORT, sslContext);
+        System.out.println("Utils.HOST: " + IP);
+//        this.chordServer = new ChordServer(PORT, sslContext);
+        this.chordServer = new ChordServer(PORT);
         run();
     }
 

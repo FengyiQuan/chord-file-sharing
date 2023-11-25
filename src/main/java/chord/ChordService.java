@@ -7,6 +7,7 @@ import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
 import java.io.*;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -19,6 +20,20 @@ public class ChordService extends ChordGrpc.ChordImplBase {
 
     public ChordService() {
         this.node = new Node(App.IP, App.PORT);
+        createFolder();
+
+    }
+
+    private void createFolder() {
+
+        try {
+            Files.createDirectory(App.SERVER_BASE_PATH);
+            System.out.println("Folder created successfully!");
+        } catch (FileAlreadyExistsException e) {
+            System.out.println("Folder already exists.");
+        } catch (IOException e) {
+            System.err.println("Unable to create the folder: " + e.getMessage());
+        }
     }
 
     public Node getNode() {
@@ -131,7 +146,6 @@ public class ChordService extends ChordGrpc.ChordImplBase {
                 try {
                     // TODO: check if file hash is on its responsibility
                     if (fileUploadRequest.hasMetadata()) {
-
                         fileName = fileUploadRequest.getMetadata().getName();
                         writer = Utils.getFilePath(fileUploadRequest);
                     } else {

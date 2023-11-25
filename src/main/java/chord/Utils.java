@@ -15,7 +15,6 @@ import java.security.NoSuchAlgorithmException;
 public class Utils {
 
 
-
     public static boolean inside(long key, long left, long right, boolean leftIncluded, boolean rightIncluded) {
 //        if (key > Node.MAX_NUMBER_NODE || key < 0) {
 //            System.out.println("inside params: key: " + key + ", left: " + left + ", right: " + right + ", leftIncluded: " + leftIncluded + ", rightIncluded: " + rightIncluded);
@@ -70,6 +69,10 @@ public class Utils {
     static void closeFile(OutputStream writer) throws IOException {
         writer.close();
 
+    }
+
+    static String formatFingerInfo(FingerInfo fingerInfo) {
+        return fingerInfo.getIp() + ":" + fingerInfo.getPort() + ", id:" + fingerInfo.getId();
     }
 
 }
