@@ -13,9 +13,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class Utils {
-    public static final String IP = System.getenv("HOST");
-    public static int PORT = Integer.parseInt(System.getenv("PORT"));
-    public static final Path SERVER_BASE_PATH = Paths.get("src/main/resources/" + System.getenv("PORT") + "/");
+
 
 
     public static boolean inside(long key, long left, long right, boolean leftIncluded, boolean rightIncluded) {
@@ -61,7 +59,7 @@ public class Utils {
     static OutputStream getFilePath(FileRequest request) throws IOException {
         String fileName = request.getMetadata().getName();
 
-        return Files.newOutputStream(SERVER_BASE_PATH.resolve(fileName), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        return Files.newOutputStream(App.SERVER_BASE_PATH.resolve(fileName), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
     static void writeFile(OutputStream writer, ByteString content) throws IOException {

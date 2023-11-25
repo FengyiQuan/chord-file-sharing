@@ -33,7 +33,7 @@ public class ChordServer {
 
     public ChordServer(ServerBuilder<?> serverBuilder) {
 //        this.port = port;
-        chordService = new ChordService(Utils.PORT);
+        chordService = new ChordService();
 
         server = serverBuilder.addService(chordService)
                 .addService(ProtoReflectionService.newInstance())
@@ -43,7 +43,7 @@ public class ChordServer {
     public void start() throws IOException, InterruptedException {
         server.start();
         chordService.getNode().start();
-        logger.info("server started on port " + Utils.PORT);
+        logger.info("server started on port " + App.PORT);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.err.println("shut down gRPC server because JVM shuts down");

@@ -17,8 +17,8 @@ public class ChordService extends ChordGrpc.ChordImplBase {
 
     private final Node node;
 
-    public ChordService(int port) {
-        this.node = new Node(port);
+    public ChordService() {
+        this.node = new Node(App.IP, App.PORT);
     }
 
     public Node getNode() {
@@ -47,7 +47,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     public void moveFiles(TargetId request, StreamObserver<FileRequest> responseObserver) {
         List<String> files = this.node.getKeys(request.getId());
         for (String fileName : files) {
-            String filePath = Utils.SERVER_BASE_PATH + fileName;
+            String filePath = App.SERVER_BASE_PATH + fileName;
 
             FileRequest metadata = FileRequest.newBuilder()
                     .setMetadata(MetaData.newBuilder()
@@ -84,7 +84,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     @Override
     public void downloadFile(TargetId request, StreamObserver<FileRequest> responseObserver) {
         String fileName = this.node.getFileName(request.getId());
-        Path filePath = Utils.SERVER_BASE_PATH.resolve(fileName);
+        Path filePath = App.SERVER_BASE_PATH.resolve(fileName);
         System.out.println(filePath);
         FileRequest metadata = FileRequest.newBuilder()
                 .setMetadata(MetaData.newBuilder()

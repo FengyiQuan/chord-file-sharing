@@ -39,7 +39,7 @@ public class Node extends ChordGrpc.ChordImplBase {
     }
 
     public Node(int port) {
-        this("localhost", port);
+        this("127.0.0.1", port);
     }
 
     public Node(String ip, int port) {
