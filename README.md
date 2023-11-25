@@ -4,7 +4,7 @@
 
 Chord File Sharing is a decentralized and peer-to-peer file-sharing application that utilizes the Chord DHT (Distributed
 Hash Table) protocol for efficient and scalable file distribution. This version of the project incorporates gRPC (gRPC
-Remote Procedure Calls) for communication between nodes, enhancing the efficiency and maintainability of the system.This
+Remote Procedure Calls) for communication between nodes, enhancing the efficiency and maintainability of the system. This
 Java application is a Chord Ring Management System that allows users to interact with a Chord distributed hash table (
 DHT) ring. The system provides various commands for uploading files, joining or creating a ring, printing the finger
 table, listing stored files and their corresponding keys, downloading files, and displaying node information. For more
@@ -29,9 +29,9 @@ information, please refer to the [Chord Paper](https://github.com/FengyiQuan/cho
 - Persistent Content Hosting: Users can upload their content to the Chord ring, and it is stored on another node. This
   ensures that the content remains available even if the original owner leaves. Users can choose to host other content
   when they are online, contributing to the resilience and availability of shared files.
-- Stabilization: The Chord ring is self-stabilizing, keeping nodes' successor pointers up to date, and tell the
-  successor about itself, which is sufficient to guarantee correctness of lookups. If a node leaves the ring, the
-  current successor does not exist. It will not actively find a new successor, fix fingers will tell the current node
+- Stabilization: The Chord ring is self-stabilizing, keeping nodes' successor pointers up to date, and telling the
+  successor about itself, which is sufficient to guarantee the correctness of lookups. If a node leaves the ring, the
+  current successor does not exist. It will not actively find a new successor, fixed fingers will tell the current node
   the correct successor.
 - Fix Fingers: periodically refresh finger table entries.
 - Soft Exit: When a node leaves the ring, it will notify its successor to take over the files that the node is hosting.
@@ -40,13 +40,13 @@ information, please refer to the [Chord Paper](https://github.com/FengyiQuan/cho
 
 ## Getting Started
 
-To run the chord file sharing application, set two environment variables: `HOST` and `PORT`.
+To run the chord file-sharing application, set two environment variables: `HOST` and `PORT`.
 
 - `PORT` is the port number that the node will listen on.
 - `HOST` is the host address of the node. The host address can be a domain name or an IP address.
 
 It will automatically create a folder named with the port number to store the files under `resources/<port>`. When app
-starts, it starts grpc-java as daemon thread by default.
+starts, it starts grpc-java as a daemon thread by default.
 
 Example of setting environment variables in IntelliJ IDEA:
 
@@ -57,7 +57,7 @@ HOST=127.0.0.1;PORT=8000
 ## Usage
 
 The first node starts the ring should call `join` with no arguments first to create a new ring. The rest of the nodes
-should call `join` with any known nodes host and port to join the ring.
+should call `join` with any known node host and port to join the ring.
 
 ### Commands
 
@@ -69,16 +69,16 @@ should call `join` with any known nodes host and port to join the ring.
 - `download <file_name>`: Download a file from the Chord ring.
 - `info`: Print node information.
 - `exit`: Quit the Chord ring. This is a graceful exit that notifies all nodes whose finger tables should refer to this
-  node when leave the ring.
+  node when leaving the ring.
 
 ## Future Work
 
 - [ ] Implement a GUI for the application.
-- [x] Support a ssl connection for grpc communication.
+- [x] Support SSL connection for grpc communication.
 - [x] Support when a node leaves the ring, the successor of the node will take over the files that the node is hosting.
 - [ ] Implement a successor list to keep track of *r* nearest successors. This enables the node to find its correct
   successor.
-- [ ] Files should store in multiple nodes to avoid single point of failure.
+- [ ] Files should be stored in multiple nodes to avoid a single point of failure.
 - [x] Soft exit.
 - [ ] Hard exit.
 
