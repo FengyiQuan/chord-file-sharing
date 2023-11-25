@@ -55,7 +55,7 @@ public class App {
     void run() {
         try {
             chordServer.start();
-            chordServer.blockUntilShutdown();
+//            chordServer.blockUntilShutdown();
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }

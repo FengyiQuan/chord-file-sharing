@@ -7,7 +7,8 @@ Hash Table) protocol for efficient and scalable file distribution. This version 
 Remote Procedure Calls) for communication between nodes, enhancing the efficiency and maintainability of the system.This
 Java application is a Chord Ring Management System that allows users to interact with a Chord distributed hash table (
 DHT) ring. The system provides various commands for uploading files, joining or creating a ring, printing the finger
-table, listing stored files and their corresponding keys, downloading files, and displaying node information.
+table, listing stored files and their corresponding keys, downloading files, and displaying node information. For more
+information, please refer to the [Chord Paper](https://github.com/FengyiQuan/chord-file-sharing/blob/main/chord.pdf).
 
 ## Table of Contents
 
@@ -28,8 +29,14 @@ table, listing stored files and their corresponding keys, downloading files, and
 - Persistent Content Hosting: Users can upload their content to the Chord ring, and it is stored on another node. This
   ensures that the content remains available even if the original owner leaves. Users can choose to host other content
   when they are online, contributing to the resilience and availability of shared files.
-- Stabilization: The Chord ring is self-stabilizing, keeping nodes' successor pointers up to date. which is sufficient
-  to guarantee correctness of lookups.
+- Stabilization: The Chord ring is self-stabilizing, keeping nodes' successor pointers up to date, and tell the
+  successor about itself, which is sufficient to guarantee correctness of lookups. If a node leaves the ring, the
+  current successor does not exist. It will not actively find a new successor, fix fingers will tell the current node
+  the correct successor.
+- Fix Fingers: periodically refresh finger table entries.
+- Soft Exit: When a node leaves the ring, it will notify its successor to take over the files that the node is hosting.
+  The successor will update its predecessor pointer to the node's predecessor. It will also update all fingers that
+  reference to self.
 
 ## Getting Started
 
@@ -61,16 +68,19 @@ should call `join` with any known nodes host and port to join the ring.
 - `files`: Print the files stored in this node's map and their corresponding keys.
 - `download <file_name>`: Download a file from the Chord ring.
 - `info`: Print node information.
-- `exit`: Quit the Chord ring.
+- `exit`: Quit the Chord ring. This is a graceful exit that notifies all nodes whose finger tables should refer to this
+  node when leave the ring.
 
 ## Future Work
 
 - [ ] Implement a GUI for the application.
-- [ ] Support a ssl connection for grpc communication.
-- [ ] Support when a node leaves the ring, the successor of the node will take over the files that the node is hosting.
+- [x] Support a ssl connection for grpc communication.
+- [x] Support when a node leaves the ring, the successor of the node will take over the files that the node is hosting.
 - [ ] Implement a successor list to keep track of *r* nearest successors. This enables the node to find its correct
   successor.
-- [ ] the file should store in multiple nodes to avoid single point of failure.
+- [ ] Files should store in multiple nodes to avoid single point of failure.
+- [x] Soft exit.
+- [ ] Hard exit.
 
 ## License
 

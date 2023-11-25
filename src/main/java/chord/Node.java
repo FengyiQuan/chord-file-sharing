@@ -7,6 +7,7 @@ import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -14,7 +15,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 
 public class Node extends ChordGrpc.ChordImplBase {
@@ -23,16 +23,18 @@ public class Node extends ChordGrpc.ChordImplBase {
     public static final int M = 3; // bits of hash
     public static final int MAX_NUMBER_NODE = (int) Math.pow(2, M); // 2^M
     public static final int PERIODICALLY_CHECK_INTERVAL = 5000; // 5s
+    public static final int R = 2; // number of successors
 
     private final String ip;
     private final int port;
     private final int id;
 
-    // key is 1,2,4,8,16
+
     private final Map<Integer, FingerInfo> fingerTable;
     private final List<Integer> fingerStart; // (n+2^(k-1) % 2^m), 1 <= k <= m
     private final Map<Long, String> fileMap; // 存储其负责的标识符，String is key
     private FingerInfo predecessor;
+    private final FingerInfo[] successorList; // keep track of the next r successors
 
 
     public Node() {
@@ -54,6 +56,7 @@ public class Node extends ChordGrpc.ChordImplBase {
         for (int k = 0; k <= M; k++) {
             this.fingerStart.add((int) ((this.id + Math.pow(2, k)) % MAX_NUMBER_NODE));
         }
+        this.successorList = new FingerInfo[R];
     }
 
     public void start() {
@@ -65,14 +68,18 @@ public class Node extends ChordGrpc.ChordImplBase {
         Scanner scanner = new Scanner(System.in);
         System.out.println("Enter text. Type 'exit' to quit.");
         while (true) {
-            System.out.print("p2p_bash>");
-            String input = scanner.nextLine();
+            System.out.print(App.IP + ":" + App.PORT + ":p2p_bash>");
+            String input = "";
+            if (scanner.hasNextLine()) {
+                input = scanner.nextLine();
+            }
 
             if (input.equalsIgnoreCase("exit")) {
                 System.out.println("Exiting program.");
+                // TODO: leave the ring and notify successor
+                this.leave();
                 System.exit(0);
             }
-
 
             String[] inputArray = input.split("\\s+");
             String command = inputArray[0];
@@ -117,6 +124,7 @@ public class Node extends ChordGrpc.ChordImplBase {
                 System.out.println("-- files: print file stored in this map and corresponding key");
                 System.out.println("-- download <file_name>: download file from chord");
                 System.out.println("-- info: print node info");
+                System.out.println("-- exit: exit program");
             }
         }
     }
@@ -127,15 +135,18 @@ public class Node extends ChordGrpc.ChordImplBase {
 
     @Override
     public String toString() {
-        List<String> ftableList = fingerTable.entrySet().stream().map(entry -> "    " + entry.getKey() + "->" + Utils.formatFingerInfo(entry.getValue()) + "\n").toList();
+        List<String> ftableList = this.fingerTable.entrySet().stream().map(entry -> "    " + entry.getKey() + "->" + Utils.formatFingerInfo(entry.getValue()) + "\n").toList();
         String ftable = String.join("", ftableList);
-        List<String> filesList = fileMap.entrySet().stream().map(entry -> "    " + entry.getValue() + ":" + entry.getKey() + "\n").toList();
+        List<String> filesList = this.fileMap.entrySet().stream().map(entry -> "    " + entry.getValue() + ":" + entry.getKey() + "\n").toList();
         String files = String.join("", filesList);
+        List<String> successorList = Arrays.stream(this.successorList).map(entry -> "    " + Utils.formatFingerInfo(entry) + "\n").toList();
+        String successors = String.join("", successorList);
         return "Node " + this.getId() + " {\n" +
                 "  address=" + ip + ":" + port + ", id=" + id + ",\n" +
                 "  fingerTable=\n" + ftable +
                 "  fileMap=\n" + files +
                 "  predecessor=" + Utils.formatFingerInfo(predecessor) + "\n" +
+                "  successorList=\n" + successors + "\n" +
                 '}';
     }
 
@@ -155,60 +166,140 @@ public class Node extends ChordGrpc.ChordImplBase {
     // first join the ring
     public void join() {
         for (int i = 0; i < M; i++) {
-            this.fingerTable.put(i, FingerInfo.newBuilder().setIp(this.ip).setPort(this.port).setId(this.id).build());
+            this.setFingerEntry(i, FingerInfo.newBuilder().setIp(this.ip).setPort(this.port).setId(this.id).build());
         }
         this.predecessor = FingerInfo.newBuilder().setIp(this.ip).setPort(this.port).setId(this.id).build();
+        this.successorList[0] = FingerInfo.newBuilder().setIp(this.ip).setPort(this.port).setId(this.id).build();
         this.runCheckingThread();
     }
 
 
     public void join(String remoteAddress, int remotePort) {
-        // TODO: check if remote address is valid
-        this.initFingerTable(remoteAddress, remotePort);
+        try {
+            this.initFingerTable(remoteAddress, remotePort);
+        } catch (StatusRuntimeException e) {
+            System.out.println("Failed to join the ring, please check the ip and port");
+            return;
+        }
         this.updateOthers();
         this.copyKeys();
         this.runCheckingThread();
     }
 
-    //    initialize finger table of  local node
+    public void leave() {
+        // notify predecessor and successor
+        FingerInfo successor = this.getSuccessor();
+        FingerInfo predecessor = this.getPredecessor();
+        ChordClient successorClient = new ChordClient(successor.getIp(), successor.getPort());
+        ChordClient predecessorClient = new ChordClient(predecessor.getIp(), predecessor.getPort());
+        ResponseStatus pStatus;
+        ResponseStatus sStatus;
+        try {
+            pStatus = predecessorClient.blockingStub.setSuccessor(successor);
+            sStatus = successorClient.blockingStub.setPredecessor(predecessor);
+        } finally {
+            predecessorClient.shutdown();
+            successorClient.shutdown();
+        }
+        for (String file : this.fileMap.values()) {
+            try {
+                this.sendFile(String.valueOf(App.SERVER_BASE_PATH.resolve(file)));
+            } catch (IOException e) {
+                System.out.println("file cannot open due to some io exception: " + file);
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                System.out.println("file cannot open due to some interrupted exception: " + file);
+                e.printStackTrace();
+            }
+        }
+        // when exit, it is optionally to delete all files stored in current node
+        this.updateOthersWhenLeave();
+    }
+
+
+    // initialize finger table of  local node, the paper states no need to let chord network aware of newly joined node in section 5.1, which means no need to notify its successor and predecessor
     public void initFingerTable(String remoteAddress, int remotePort) {
 //        System.out.println("remoteAddress: " + remoteAddress + " remotePort: " + remotePort);
         ChordClient chordClient = new ChordClient(remoteAddress, remotePort);
-        FingerInfo successor = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.id).build());
-        this.fingerTable.put(0, successor);
+        try {
+            FingerInfo successor = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.id).build());
+//            this.fingerTable.put(0, successor);
+            this.setSuccessor(successor);
 //        System.out.println("successor: " + successor.toString());
-        ChordClient successorClient = new ChordClient(this.getSuccessor().getIp(), this.getSuccessor().getPort());
-        FingerInfo predecessor = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
+            ChordClient successorClient = new ChordClient(this.getSuccessor().getIp(), this.getSuccessor().getPort());
+            FingerInfo predecessor = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
 
-        this.predecessor = predecessor;
-        ChordClient predecessorClient = new ChordClient(predecessor.getIp(), predecessor.getPort());
-        ResponseStatus pStatus = predecessorClient.blockingStub.setSuccessor(this.getSelfFingerInfo());
-        ResponseStatus sStatus = successorClient.blockingStub.setPredecessor(this.getSelfFingerInfo());
+            this.predecessor = predecessor;
+            ChordClient predecessorClient = new ChordClient(predecessor.getIp(), predecessor.getPort());
+            ResponseStatus pStatus;
+            ResponseStatus sStatus;
+            try {
+                pStatus = predecessorClient.blockingStub.setSuccessor(this.getSelfFingerInfo());
+                sStatus = successorClient.blockingStub.setPredecessor(this.getSelfFingerInfo());
+            } catch (StatusRuntimeException e) {
+                System.out.println("cannot connect predecessorClient, ip: " + predecessor.getIp() + " port: " + predecessor.getPort());
+            } finally {
+                predecessorClient.shutdown();
+                successorClient.shutdown();
+            }
 
-        if (DEBUG) {
-            logger.info("initFingerTable result: pStatus" + pStatus.getStatus() + ", sStatus" + sStatus.getStatus());
-        }
+            if (DEBUG) {
+                logger.info("initFingerTable result: pStatus" + pStatus.getStatus() + ", sStatus" + sStatus.getStatus());
+            }
 
-        for (int i = 0; i < M; i++) {
-            FingerInfo newFinger = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.fingerStart.get(i + 1)).build());
-            this.fingerTable.put(i + 1, newFinger);
+            for (int i = 0; i < M - 1; i++) {
+                FingerInfo newFinger = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.fingerStart.get(i + 1)).build());
+                this.fingerTable.put(i + 1, newFinger);
 
+            }
+        } catch (StatusRuntimeException e) {
+            System.out.println("Failed to init finger table, please check the ip and port");
+        } finally {
+            chordClient.shutdown();
         }
     }
 
     // update all nodes whose finger tables should refer to this node
     private void updateOthers() {
-//        System.out.println("updateOthers called");
-        this.printFTable();
+//        this.printFTable();
         for (int i = 0; i < M; i++) {
             // find last node p whose i_th finger might be this node
-            FingerInfo p = this.findPredecessor(this.id - (int) Math.pow(2, i));
-            System.out.println(p.toString());
+            int prev;
+            if (this.getId() >= Math.pow(2, i)) {
+                prev = this.getId() - (int) Math.pow(2, i);
+            } else {
+                prev = MAX_NUMBER_NODE - (int) Math.pow(2, i) + this.getId();
+            }
+            FingerInfo p = this.findPredecessor(prev);
             ChordClient chordClient = new ChordClient(p.getIp(), p.getPort());
+            try {
+                ResponseStatus response = chordClient.blockingStub.updateFingerTable(UpdateFingerRequest.newBuilder().setFinger(this.getSelfFingerInfo()).setIndex(i).build());
 
-            ResponseStatus response = chordClient.blockingStub.updateFingerTable(UpdateFingerRequest.newBuilder().setFinger(this.getSelfFingerInfo()).setIndex(i).build());
-//            System.out.println("updateOthers result: " + response.getStatus());
+            } finally {
+                chordClient.shutdown();
+            }
+        }
+    }
 
+    // update all nodes whose finger tables should refer to this node when leave the ring
+    public void updateOthersWhenLeave() {
+        // TODO: updateOthersWhenLeave
+        FingerInfo successor = this.getSuccessor();
+        for (int i = 0; i < M; i++) {
+            int prev;
+            if (this.getId() >= Math.pow(2, i)) {
+                prev = this.getId() - (int) Math.pow(2, i);
+            } else {
+                prev = MAX_NUMBER_NODE - (int) Math.pow(2, i) + this.getId();
+            }
+            FingerInfo p = this.findPredecessor(prev);
+            ChordClient chordClient = new ChordClient(p.getIp(), p.getPort());
+            try {
+                ResponseStatus response = chordClient.blockingStub.updateFingerTable(UpdateFingerRequest.newBuilder().setFinger(successor).setIndex(i).build());
+
+            } finally {
+                chordClient.shutdown();
+            }
         }
     }
 
@@ -216,28 +307,75 @@ public class Node extends ChordGrpc.ChordImplBase {
 //        System.out.println("stabilize called");
         FingerInfo successor = this.getSuccessor();
         ChordClient successorClient = new ChordClient(successor.getIp(), successor.getPort());
-        FingerInfo x = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
-        if (Utils.inside(x.getId(), this.id, successor.getId(), false, false)) {
-            this.setSuccessor(x);
+        FingerInfo x;
+        FingerInfo successorSuccessors; // TODO: change it to a list
+
+        try {
+            successorSuccessors = successorClient.blockingStub.getSuccessor(GetSuccessorRequest.newBuilder().build());
+            this.setSuccessor(1, successorSuccessors);
+
+            x = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
+            if (Utils.inside(x.getId(), this.id, successor.getId(), false, false)) {
+                this.setSuccessor(x);
+            }
+            this.notifyOther(successor);
+        } catch (StatusRuntimeException e) {
+            // connection is shutdown, we assume that the node is down and delete that node in finger table
+//            System.out.println("Stabilize Node not exists");
+//            // TODO: connection checking
+//            int healthIndex = 1;
+////            while (healthIndex < R) {
+//            try {
+//                this.setFingerEntry(0, this.successorList[healthIndex]);
+//                this.setSuccessor(0, this.successorList[healthIndex]);
+//                System.out.println("trying to reconstruct finger table based on successor" + Utils.formatFingerInfo(this.getSuccessor()));
+//                this.initFingerTable(this.getSuccessor().getIp(), this.getSuccessor().getPort());
+//                printFTable();
+////
+////                    break;
+//            } catch (StatusRuntimeException e1) {
+////                    e1.printStackTrace();
+////                    System.out.println("healthIndex increment");
+////                    healthIndex++;
+////                }
+//
+//            }
+        } finally {
+            successorClient.shutdown();
         }
 
-        this.notifyOther(successor);
 
     }
 
+
     private void notifyOther(FingerInfo successor) {
         ChordClient newSuccessorClient = new ChordClient(successor.getIp(), successor.getPort());
-        ResponseStatus responseStatus = newSuccessorClient.blockingStub.notify(this.getSelfFingerInfo());
+        try {
+            ResponseStatus responseStatus = newSuccessorClient.blockingStub.notify(this.getSelfFingerInfo());
+        } finally {
+            newSuccessorClient.shutdown();
+        }
 //        System.out.println("notifyOther result: " + responseStatus.getStatus());
     }
 
     public void fixFingers() {
-//        System.out.println("fixFingers called");
-        int index = ThreadLocalRandom.current().nextInt(1, M + 1);
+
+        int index = ThreadLocalRandom.current().nextInt(1, M);
         ChordClient chordClient = new ChordClient(this.ip, this.port);
-        FingerInfo fingerInfo = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.fingerStart.get(index)).build());
-        this.setFingerEntry(index, fingerInfo);
+        FingerInfo fingerInfo;
+        // if connection is shutdown, we assume that the node is down and delete that node in finger table and find a new one
+
+        try {
+            fingerInfo = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(this.fingerStart.get(index)).build());
+            this.setFingerEntry(index, fingerInfo);
+        } catch (StatusRuntimeException e) {
+            System.out.println("connection is shutdown, we assume that the node is down and delete that node in finger table and find a new one");
+
+        } finally {
+            chordClient.shutdown();
+        }
     }
+
 
     public List<String> getKeys(long id) {
         List<String> keys = new ArrayList<>();
@@ -266,7 +404,22 @@ public class Node extends ChordGrpc.ChordImplBase {
     }
 
     public void setFingerEntry(int index, FingerInfo fingerInfo) {
+        // TODO: match setSuccessorList
         this.fingerTable.put(index, fingerInfo);
+//
+    }
+
+    public void setSuccessor(FingerInfo successor) {
+        this.fingerTable.put(0, successor);
+        this.successorList[0] = successor;
+    }
+
+    public void setSuccessor(int index, FingerInfo fingerInfo) {
+        // TODO: match setSuccessorList
+        this.successorList[index] = fingerInfo;
+
+//            this.fingerTable.put(index, fingerInfo);
+
     }
 
 
@@ -275,12 +428,10 @@ public class Node extends ChordGrpc.ChordImplBase {
     }
 
     public FingerInfo getSuccessor() {
-        return this.fingerTable.get(0);
+//        return this.fingerTable.get(0);
+        return this.successorList[0];
     }
 
-    public void setSuccessor(FingerInfo successor) {
-        this.fingerTable.put(0, successor);
-    }
 
     public FingerInfo getPredecessor() {
         return this.predecessor;
@@ -298,12 +449,15 @@ public class Node extends ChordGrpc.ChordImplBase {
         } catch (StatusRuntimeException e) {
             logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
             return;
+        } finally {
+            chordClient.shutdown();
         }
         OutputStream writer = null;
 
         while (fileChunks.hasNext()) {
             try {
                 FileRequest chunk = fileChunks.next();
+//                System.out.println("chunk: " + chunk.toString());
                 if (chunk.hasMetadata() && writer == null) {
                     writer = Utils.getFilePath(chunk);
                 } else if (chunk.hasMetadata()) {
@@ -332,7 +486,12 @@ public class Node extends ChordGrpc.ChordImplBase {
     public void downloadFile(String file) {
         FingerInfo successor = this.getSuccessor();
         ChordClient chordClient = new ChordClient(successor.getIp(), successor.getPort());
-        FingerInfo responsibleNode = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(Utils.getKey(file)).build());
+        FingerInfo responsibleNode;
+        try {
+            responsibleNode = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(Utils.getKey(file)).build());
+        } finally {
+            chordClient.shutdown();
+        }
 
         ChordClient responsibleClient = new ChordClient(responsibleNode.getIp(), responsibleNode.getPort());
         logger.info("downloadFile called, fetch file from " + responsibleNode + " for file " + file);
@@ -342,6 +501,8 @@ public class Node extends ChordGrpc.ChordImplBase {
         } catch (StatusRuntimeException e) {
             logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
             return;
+        } finally {
+            responsibleClient.shutdown();
         }
         OutputStream writer = null;
 
@@ -370,7 +531,7 @@ public class Node extends ChordGrpc.ChordImplBase {
         }
     }
 
-    // TODO: download address should choose from finger table
+
     public void sendFile(String path) throws IOException, InterruptedException {
         FingerInfo successor = this.getSuccessor();
         final CountDownLatch finishLatch = new CountDownLatch(1);
@@ -400,6 +561,7 @@ public class Node extends ChordGrpc.ChordImplBase {
         inputStream.close();
         streamObserver.onCompleted();
         finishLatch.await();
+        chordClient.shutdown();
     }
 
     public FingerInfo findPredecessor(long id) {
@@ -415,14 +577,18 @@ public class Node extends ChordGrpc.ChordImplBase {
                 FingerInfo nDashSuccessor = chordClient.blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS).getSuccessor(request);
                 if (!Utils.inside(id, nDash.getId(), nDashSuccessor.getId(), false, true)) {
                     TargetId targetId = TargetId.newBuilder().setId(id).build();
-                    nDash = chordClient.blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS).closestPrecedingFinger(targetId);
+                    nDash = chordClient.blockingStub.closestPrecedingFinger(targetId);
+//                    nDash = chordClient.blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS).closestPrecedingFinger(targetId);
 
                 } else {
                     break;
                 }
-            } catch (StatusRuntimeException e) {
-                logger.log(Level.SEVERE, "request failed: " + e.getMessage());
-                return null;
+            } catch (StatusRuntimeException  e) {
+//                e.printStackTrace(); TODO: get it back to debug purpose
+//                logger.log(Level.SEVERE, "request failed: " + e.getMessage());
+                return nDash;
+            } finally {
+                chordClient.shutdown();
             }
         }
         if (DEBUG) {
@@ -452,8 +618,8 @@ public class Node extends ChordGrpc.ChordImplBase {
             return;
         }
         System.out.println("<--------------------  Finger Table: --------------------->");
-        for (int i = 0; i < M; i++) {
-            System.out.println("Finger " + i + ": " + this.fingerTable.get(i).getId() + " " + this.fingerTable.get(i).getIp() + " " + this.fingerTable.get(i).getPort());
+        for (Map.Entry<Integer, FingerInfo> entry : this.fingerTable.entrySet()) {
+            System.out.println(entry.getKey() + ": " + entry.getValue().getId() + " " + entry.getValue().getIp() + ":" + entry.getValue().getPort());
         }
         System.out.println("<--------------------------------------------------------->");
     }

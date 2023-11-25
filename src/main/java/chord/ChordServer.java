@@ -36,7 +36,7 @@ public class ChordServer {
         chordService = new ChordService();
 
         server = serverBuilder.addService(chordService)
-                .addService(ProtoReflectionService.newInstance())
+//                .addService(ProtoReflectionService.newInstance())
                 .build();
     }
 

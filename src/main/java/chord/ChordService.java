@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.GeneratedMessageV3;
 import io.grpc.Context;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 import java.io.*;
@@ -62,8 +63,8 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     public void moveFiles(TargetId request, StreamObserver<FileRequest> responseObserver) {
         List<String> files = this.node.getKeys(request.getId());
         for (String fileName : files) {
-            String filePath = App.SERVER_BASE_PATH + fileName;
-
+            Path filePath = App.SERVER_BASE_PATH.resolve(fileName);
+//            System.out.println("Sending file: " + filePath);
             FileRequest metadata = FileRequest.newBuilder()
                     .setMetadata(MetaData.newBuilder()
                             .setName(fileName))
@@ -71,7 +72,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
             responseObserver.onNext(metadata);
             try {
                 // read the file and convert to a byte array
-                InputStream inputStream = Files.newInputStream(Path.of(filePath));
+                InputStream inputStream = Files.newInputStream(filePath);
                 byte[] bytes = new byte[4096];
                 int size;
                 while ((size = inputStream.read(bytes)) > 0) {
@@ -86,7 +87,9 @@ public class ChordService extends ChordGrpc.ChordImplBase {
                 // close the stream
                 inputStream.close();
                 this.node.removeKey(Utils.getKey(fileName));
+                Files.delete(filePath);
             } catch (IOException e) {
+                e.printStackTrace();
                 responseObserver.onError(Status.ABORTED
                         .withDescription("Unable to acquire the file " + fileName)
                         .withCause(e)
@@ -186,8 +189,16 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     public void findSuccessor(TargetId request, StreamObserver<FingerInfo> responseObserver) {
         FingerInfo n_dash = this.node.findPredecessor(request.getId());
         ChordClient client = new ChordClient(n_dash.getIp(), n_dash.getPort());
-        FingerInfo fingerInfo = client.blockingStub.getSuccessor(GetSuccessorRequest.newBuilder().build());
-        client.shutdown();
+        FingerInfo fingerInfo = null;
+        try {
+            fingerInfo = client.blockingStub.getSuccessor(GetSuccessorRequest.newBuilder().build());
+        } catch (StatusRuntimeException e) {
+//            e.printStackTrace();
+            System.out.println("Node " + n_dash + " is not available");
+        } finally {
+            client.shutdown();
+        }
+//        client.shutdown();
         if (!requiredNonCancelled(responseObserver)) {
             return;
         }
@@ -197,6 +208,8 @@ public class ChordService extends ChordGrpc.ChordImplBase {
             logger.info("findSuccessor: " + fingerInfo);
         }
     }
+
+
 
     @Override
     public void getSuccessor(GetSuccessorRequest request, StreamObserver<FingerInfo> responseObserver) {
@@ -233,11 +246,16 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         ResponseStatus.Status status = ResponseStatus.Status.SUCCESS;
         responseObserver.onNext(ResponseStatus.newBuilder().setStatus(status).build());
         responseObserver.onCompleted();
-        logger.info("setSuccessor: " + status + ",request: " + request);
+        if (Node.DEBUG) {
+            logger.info("setSuccessor: " + status + ",request: " + request);
+        }
     }
 
     @Override
     public void setPredecessor(FingerInfo request, StreamObserver<ResponseStatus> responseObserver) {
+        if (Node.DEBUG) {
+            logger.info("setPredecessor: " + request);
+        }
         this.node.setPredecessor(request);
         if (!requiredNonCancelled(responseObserver)) {
             return;
@@ -245,7 +263,9 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         ResponseStatus.Status status = ResponseStatus.Status.SUCCESS;
         responseObserver.onNext(ResponseStatus.newBuilder().setStatus(status).build());
         responseObserver.onCompleted();
-        logger.info("setPredecessor: " + status + ",request: " + request);
+        if (Node.DEBUG) {
+            logger.info("setPredecessor: " + status + ",request: " + request);
+        }
     }
 
     @Override
@@ -265,7 +285,9 @@ public class ChordService extends ChordGrpc.ChordImplBase {
 
     @Override
     public void updateFingerTable(UpdateFingerRequest request, StreamObserver<ResponseStatus> responseObserver) {
-        logger.info("updateFingerTable: " + request);
+        if (Node.DEBUG) {
+            logger.info("updateFingerTable: " + request);
+        }
         FingerInfo fingerInfo = request.getFinger();
         int index = request.getIndex();
         ResponseStatus response;
@@ -274,7 +296,11 @@ public class ChordService extends ChordGrpc.ChordImplBase {
             this.node.setFingerEntry(index, fingerInfo);
             FingerInfo p = this.node.getPredecessor();
             ChordClient chordClient = new ChordClient(p.getIp(), p.getPort());
-            response = chordClient.blockingStub.updateFingerTable(UpdateFingerRequest.newBuilder().setFinger(fingerInfo).setIndex(index).build());
+            try {
+                response = chordClient.blockingStub.updateFingerTable(UpdateFingerRequest.newBuilder().setFinger(fingerInfo).setIndex(index).build());
+            } finally {
+                chordClient.shutdown();
+            }
             responseObserver.onNext(response);
             if (!requiredNonCancelled(responseObserver)) {
                 return;
@@ -285,8 +311,9 @@ public class ChordService extends ChordGrpc.ChordImplBase {
         }
 
         responseObserver.onCompleted();
-
-        logger.info("updateFingerTable: " + response);
+        if (Node.DEBUG) {
+            logger.info("updateFingerTable: " + response);
+        }
     }
 
     private boolean requiredNonCancelled(StreamObserver<? extends GeneratedMessageV3> responseObserver) {
