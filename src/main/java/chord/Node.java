@@ -75,7 +75,6 @@ public class Node extends ChordGrpc.ChordImplBase {
 
             if (input.equalsIgnoreCase("exit")) {
                 System.out.println("Exiting program.");
-                // TODO: leave the ring and notify successor
                 this.leave();
                 System.exit(0);
             }
@@ -96,6 +95,8 @@ public class Node extends ChordGrpc.ChordImplBase {
             }
             if (!joined) {
                 System.out.println("Please join the ring first.");
+                System.out.println("-- join: start a new ring");
+                System.out.println("-- join [<ip>] [<port>]: join chord ring, if no ip and port provided, start new ring");
                 continue;
             }
             if (command.equalsIgnoreCase("upload") && inputArray.length == 2) {
@@ -282,7 +283,6 @@ public class Node extends ChordGrpc.ChordImplBase {
 
     // update all nodes whose finger tables should refer to this node when leave the ring
     public void updateOthersWhenLeave() {
-        // TODO: updateOthersWhenLeave
         FingerInfo successor = this.getSuccessor();
         for (int i = 0; i < M; i++) {
             int prev;
@@ -452,24 +452,32 @@ public class Node extends ChordGrpc.ChordImplBase {
             chordClient.shutdown();
         }
         OutputStream writer = null;
-
+//        List<String> fileNames = new ArrayList<>();
         while (fileChunks.hasNext()) {
+            String fileName = "";
             try {
                 FileRequest chunk = fileChunks.next();
 //                System.out.println("chunk: " + chunk.toString());
                 if (chunk.hasMetadata() && writer == null) {
+                    fileName = chunk.getMetadata().getName();
+                    this.addKey(Utils.getKey(fileName), fileName);
                     writer = Utils.getFilePath(chunk);
                 } else if (chunk.hasMetadata()) {
                     Utils.closeFile(writer);
+                    fileName = chunk.getMetadata().getName();
+                    this.addKey(Utils.getKey(fileName), fileName);
                     writer = Utils.getFilePath(chunk);
 
                 } else {
                     if (writer == null) {
+                        this.removeKey(Utils.getKey(fileName));
                         throw new IOException("writer not properly initialized");
+                    } else {
+                        Utils.writeFile(writer, chunk.getFile().getContent());
                     }
-                    Utils.writeFile(writer, chunk.getFile().getContent());
                 }
             } catch (IOException e) {
+                this.removeKey(Utils.getKey(fileName));
                 logger.log(Level.SEVERE, "Error writing file: " + e.getMessage());
             }
         }
@@ -532,11 +540,14 @@ public class Node extends ChordGrpc.ChordImplBase {
 
 
     public void sendFile(String path) throws IOException, InterruptedException {
-        FingerInfo successor = this.getSuccessor();
+//        this.lookup();
+        ChordClient chordClient = new ChordClient(this.ip, this.port);
+        FingerInfo responsibleNode = chordClient.blockingStub.findSuccessor(TargetId.newBuilder().setId(Utils.getKey(path)).build());
+//        FingerInfo successor = this.getSuccessor();
         final CountDownLatch finishLatch = new CountDownLatch(1);
-        ChordClient chordClient = new ChordClient(successor.getIp(), successor.getPort());
-        logger.info("will try to upload file " + path + " to " + successor.getIp() + ":" + successor.getPort());
-        StreamObserver<FileRequest> streamObserver = chordClient.asyncStub.upload(new FileUploadObserver(finishLatch));
+        ChordClient responsibleClient = new ChordClient(responsibleNode.getIp(), responsibleNode.getPort());
+        logger.info("will try to upload file " + path + " to " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
+        StreamObserver<FileRequest> streamObserver = responsibleClient.asyncStub.upload(new FileUploadObserver(finishLatch));
 
         Path p = Paths.get(path);
 
@@ -582,8 +593,8 @@ public class Node extends ChordGrpc.ChordImplBase {
                 } else {
                     break;
                 }
-            } catch (StatusRuntimeException  e) {
-//                e.printStackTrace(); TODO: get it back to debug purpose
+            } catch (StatusRuntimeException e) {
+                e.printStackTrace();
 //                logger.log(Level.SEVERE, "request failed: " + e.getMessage());
                 return nDash;
             } finally {
@@ -625,10 +636,10 @@ public class Node extends ChordGrpc.ChordImplBase {
 
     void printFileMap() {
         if (this.fileMap == null || this.fileMap.size() == 0) {
-            System.out.println("File Map is empty, please join first");
+            System.out.println("File Map is empty, no files stored in this node");
             return;
         }
-        System.out.println("<--------------------  File Map: --------------------->");
+        System.out.println("<----------------------  File Map: ----------------------->");
         for (Map.Entry<Long, String> entry : this.fileMap.entrySet()) {
             System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
         }

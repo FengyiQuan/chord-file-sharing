@@ -35,8 +35,8 @@ public class Utils {
     }
 
 
-    // message is hash of the file name
-    public static int getKey(String message) {
+    // fileName is hash of the file name
+    public static int getKey(String fileName) {
 
         MessageDigest md;
         try {
@@ -46,7 +46,7 @@ public class Utils {
             return 0;
         }
 
-        byte[] messageDigest = md.digest(message.getBytes());
+        byte[] messageDigest = md.digest(fileName.getBytes());
 
         // Convert byte array into Dignum representation
         BigInteger no = new BigInteger(1, messageDigest);

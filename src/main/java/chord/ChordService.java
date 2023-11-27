@@ -103,7 +103,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
     public void downloadFile(TargetId request, StreamObserver<FileRequest> responseObserver) {
         String fileName = this.node.getFileName(request.getId());
         Path filePath = App.SERVER_BASE_PATH.resolve(fileName);
-        System.out.println(filePath);
+//        System.out.println(filePath);
         FileRequest metadata = FileRequest.newBuilder()
                 .setMetadata(MetaData.newBuilder()
                         .setName(fileName))
@@ -147,7 +147,7 @@ public class ChordService extends ChordGrpc.ChordImplBase {
             @Override
             public void onNext(FileRequest fileUploadRequest) {
                 try {
-                    // TODO: check if file hash is on its responsibility
+                    // TODO: check if file hash is on its responsibility, no need to implement right now, because we assume node is sending to the correct responsible node.
                     if (fileUploadRequest.hasMetadata()) {
                         fileName = fileUploadRequest.getMetadata().getName();
                         writer = Utils.getFilePath(fileUploadRequest);
@@ -208,7 +208,6 @@ public class ChordService extends ChordGrpc.ChordImplBase {
             logger.info("findSuccessor: " + fingerInfo);
         }
     }
-
 
 
     @Override
