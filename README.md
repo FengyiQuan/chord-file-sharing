@@ -1,3 +1,5 @@
+[![Gradle CI](https://github.com/FengyiQuan/rust-mlops-template/actions/workflows/gradle.yml/badge.svg)](https://github.com/FengyiQuan/rust-mlops-template/actions/workflows/gradle.yml)
+
 # chord-file-sharing
 
 ## Overview
