@@ -375,11 +375,18 @@ public class Node extends ChordGrpc.ChordImplBase {
         }
     }
 
-
+    /**
+     * calculate all files that should be responsible for the new node with the given id, this is a helper for server side chord. When a newly joined node, it will ask its success (this node) to transfer files to itself
+     *
+     * @param id the id of the new node
+     * @return a list of file names that should be responsible for the new node
+     */
     public List<String> getKeys(long id) {
         List<String> keys = new ArrayList<>();
         for (Map.Entry<Long, String> entry : this.fileMap.entrySet()) {
-            if (Utils.inside(entry.getKey(), this.predecessor.getId(), id, false, true)) {
+            if (Utils.inside(entry.getKey(), this.getId(), id, false, true)) {
+//                System.out.println("file"+ entry.getValue() + "should be responsible for the new node" + id);
+//                System.out.println("file id: " + entry.getKey() + "predecessor id: " + this.predecessor.getId() + "new node id: " + id);
                 keys.add(entry.getValue());
             }
         }
@@ -441,6 +448,7 @@ public class Node extends ChordGrpc.ChordImplBase {
     }
 
     public void copyKeys() {
+        // TOOD: copy keys 不对
         ChordClient chordClient = new ChordClient(this.getSuccessor().getIp(), this.getSuccessor().getPort());
         Iterator<FileRequest> fileChunks;
         try {

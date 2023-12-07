@@ -9,13 +9,15 @@ This Java application is a Chord Ring Management System that allows users to int
 table (DHT) ring. The system provides various commands for uploading files, joining or creating a ring, printing the
 finger table, listing stored files and their corresponding keys, downloading files, and displaying node information. For
 more information, please refer to
-the [Chord Paper](https://github.com/FengyiQuan/chord-file-sharing/blob/main/chord.pdf).
+the [Chord Paper](./chord.pdf).
 
 ## Table of Contents
 
 - [Features](#features)
 - [Getting Started](#getting-started)
 - [Usage](#usage)
+- [Commands](#commands)
+- [Work Flow](#work-flow)
 - [Future Work](#future-work)
 - [Report](#report)
 - [License](#license)
@@ -70,6 +72,9 @@ should call `join` with any known node host and port to join the ring.
 - `info`: Print node information.
 - `exit`: Quit the Chord ring. This is a graceful exit that notifies all nodes whose finger tables should refer to this
   node when leaving the ring.
+
+## Work Flow
+![work_flow](./chart/user_flow.png)
 
 ## Future Work
 
