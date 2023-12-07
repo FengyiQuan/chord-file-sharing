@@ -8,8 +8,8 @@ Remote Procedure Calls) for communication between nodes, enhancing the efficienc
 This Java application is a Chord Ring Management System that allows users to interact with a Chord distributed hash
 table (DHT) ring. The system provides various commands for uploading files, joining or creating a ring, printing the
 finger table, listing stored files and their corresponding keys, downloading files, and displaying node information. For
-more information, please refer to
-the [Chord Paper](./chord.pdf).
+more information, please refer to the [Chord Paper](./chord.pdf). This project also uses GitHub Actions for continuous
+integration.
 
 ## Table of Contents
 
@@ -74,6 +74,7 @@ should call `join` with any known node host and port to join the ring.
   node when leaving the ring.
 
 ## Work Flow
+
 ![work_flow](./chart/user_flow.png)
 
 ## Future Work
