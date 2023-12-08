@@ -22,7 +22,7 @@ public class Node extends ChordGrpc.ChordImplBase {
     public static final int M = 3; // bits of hash
     public static final int MAX_NUMBER_NODE = (int) Math.pow(2, M); // 2^M
     public static final int PERIODICALLY_CHECK_INTERVAL = 5000; // 5s
-    public static final int R = 2; // number of successors
+    public static final int R = 3; // number of successors
 
     private final String ip;
     private final int port;
@@ -155,10 +155,10 @@ public class Node extends ChordGrpc.ChordImplBase {
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                Node.this.fixFingers();
+               // Node.this.fixFingers();
                 Node.this.stabilize();
             }
-        }, 1000, Node.PERIODICALLY_CHECK_INTERVAL);
+        }, 3000, Node.PERIODICALLY_CHECK_INTERVAL);
     }
 
 
@@ -304,42 +304,63 @@ public class Node extends ChordGrpc.ChordImplBase {
 
     public void stabilize() {
 //        System.out.println("stabilize called");
+        // always start from the node itself
         FingerInfo successor = this.getSuccessor();
+        if (successor == null) {
+            return;
+        }
         ChordClient successorClient = new ChordClient(successor.getIp(), successor.getPort());
         FingerInfo x;
         FingerInfo successorSuccessors; // TODO: change it to a list
-
+        int i = 0;
         try {
-            successorSuccessors = successorClient.blockingStub.getSuccessor(GetSuccessorRequest.newBuilder().build());
-            this.setSuccessor(1, successorSuccessors);
-
             x = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
             if (Utils.inside(x.getId(), this.id, successor.getId(), false, false)) {
                 this.setSuccessor(x);
             }
             this.notifyOther(successor);
-        } catch (StatusRuntimeException e) {
+            // update successorClient
+            successorClient = new ChordClient(this.successorList[0].getIp(), this.successorList[0].getPort());
+            // loop whole successorlist and update
+           for (i = 1; i < this.successorList.length; i++) {
+
+                successorSuccessors = successorClient.blockingStub.getSuccessor(GetSuccessorRequest.newBuilder().build());
+//                System.out.println(i);
+//                System.out.println(successorSuccessors.getPort());
+                // init
+               if (this.successorList[i] == null) {
+                   this.successorList[i] = successorSuccessors;
+                   successorClient = new ChordClient(successor.getIp(), successor.getPort());
+                   continue;
+               }
+               // update a better one
+               this.setSuccessor(i, successorSuccessors);
+//                x = successorClient.blockingStub.getPredecessor(GetPredecessorRequest.newBuilder().build());
+//                if (Utils.inside(x.getId(), this.id, successor.getId(), false, false)) {
+//                    this.setSuccessor(i, x);
+//                }
+                this.notifyOther(successor);
+                // update successorClient
+                successorClient = new ChordClient(this.successorList[i].getIp(), this.successorList[i].getPort());
+            }
+        }
+        catch (StatusRuntimeException e) {
             // connection is shutdown, we assume that the node is down and delete that node in finger table
-//            System.out.println("Stabilize Node not exists");
-//            // TODO: connection checking
-//            int healthIndex = 1;
-////            while (healthIndex < R) {
-//            try {
-//                this.setFingerEntry(0, this.successorList[healthIndex]);
-//                this.setSuccessor(0, this.successorList[healthIndex]);
-//                System.out.println("trying to reconstruct finger table based on successor" + Utils.formatFingerInfo(this.getSuccessor()));
-//                this.initFingerTable(this.getSuccessor().getIp(), this.getSuccessor().getPort());
-//                printFTable();
-////
-////                    break;
-//            } catch (StatusRuntimeException e1) {
-////                    e1.printStackTrace();
-////                    System.out.println("healthIndex increment");
-////                    healthIndex++;
-////                }
-//
-//            }
-        } finally {
+            System.out.println("one successor down, stabilizing");
+            // remove it from the list and shift others up
+            for (int j = i; j < this.successorList.length-1; j++) {
+                this.successorList[j] = this.successorList[j+1];
+            }
+            this.successorList[this.successorList.length-1] = null;
+            for (int k = 0; k< this.successorList.length; k++){
+                System.out.println("current successor list are"+this.successorList[k]);
+            }
+            // add new successor at the end of the list
+//            successorClient = new ChordClient(this.successorList[this.successorList.length-2].getIp(), this.successorList[this.successorList.length-2].getPort());
+//            successorSuccessors = successorClient.blockingStub.getSuccessor(GetSuccessorRequest.newBuilder().build());
+//            this.setSuccessor(successorList.length-1, successorSuccessors);
+        }
+        finally {
             successorClient.shutdown();
         }
 
