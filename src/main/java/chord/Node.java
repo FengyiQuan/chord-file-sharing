@@ -14,6 +14,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 
 public class Node extends ChordGrpc.ChordImplBase {
@@ -139,8 +140,16 @@ public class Node extends ChordGrpc.ChordImplBase {
         String ftable = String.join("", ftableList);
         List<String> filesList = this.fileMap.entrySet().stream().map(entry -> "    " + entry.getValue() + ":" + entry.getKey() + "\n").toList();
         String files = String.join("", filesList);
-        List<String> successorList = Arrays.stream(this.successorList).map(entry -> "    " + Utils.formatFingerInfo(entry) + "\n").toList();
-        String successors = String.join("", successorList);
+        String successors;
+        if (this.successorList[0] != null) {
+            List<String> successorList = Arrays.stream(this.successorList)
+                    .map(entry -> "    " + (entry != null ? Utils.formatFingerInfo(entry) : "null") + "\n")
+                    .collect(Collectors.toList());
+            successors = String.join("", successorList);
+        } else {
+            successors = "    null\n";
+        }
+
         return "Node " + this.getId() + " {\n" +
                 "  address=" + ip + ":" + port + ", id=" + id + ",\n" +
                 "  fingerTable=\n" + ftable +
@@ -155,7 +164,7 @@ public class Node extends ChordGrpc.ChordImplBase {
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                // Node.this.fixFingers();
+                Node.this.fixFingers();
                 Node.this.stabilize();
             }
         }, 3000, Node.PERIODICALLY_CHECK_INTERVAL);
